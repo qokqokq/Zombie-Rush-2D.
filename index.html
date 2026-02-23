@@ -1,0 +1,1323 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Zombie 2D — Zombie HP + Reload Messages</title>
+  <style>
+    html,body{margin:0;height:100%;background:#07090f;overflow:hidden;font-family:system-ui}
+    canvas{display:block;margin:0 auto;background:#0b1020}
+    #ui{position:fixed;inset:0;color:#fff;pointer-events:none;padding:12px;display:flex;flex-direction:column;justify-content:space-between}
+    .top{display:flex;gap:10px;flex-wrap:wrap;justify-content:space-between;align-items:flex-start}
+    .panel{background:rgba(0,0,0,.45);border:1px solid rgba(255,255,255,.14);border-radius:14px;padding:10px 12px;backdrop-filter:blur(6px)}
+    .line{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+    .hint{font-size:13px;opacity:.9;line-height:1.55}
+    .bars{display:flex;gap:10px;flex-wrap:wrap}
+    .bar{width:220px}
+    .bar label{display:flex;justify-content:space-between;font-size:13px;opacity:.9}
+    .track{height:10px;border-radius:999px;background:rgba(255,255,255,.14);overflow:hidden;margin-top:6px}
+    .fill{height:100%;width:50%;background:#5ef28c}
+    #toast{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);
+      background:rgba(0,0,0,.55);border:1px solid rgba(255,255,255,.14);
+      padding:10px 12px;border-radius:14px;color:#fff;opacity:0;transition:opacity .18s;
+      max-width:min(920px,92vw);text-align:center;pointer-events:none;font-size:14px}
+
+    /* ✅ bottom hint messages */
+    #bottomHint{
+      position:fixed;left:50%;bottom:58px;transform:translateX(-50%);
+      background:rgba(0,0,0,.48);border:1px solid rgba(255,255,255,.14);
+      padding:10px 12px;border-radius:14px;color:#fff;opacity:0;
+      transition:opacity .15s;pointer-events:none;
+      max-width:min(920px,92vw);text-align:center;font-size:14px
+    }
+
+    .overlay{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.62);pointer-events:auto}
+    .card{width:min(720px,92vw);background:rgba(15,15,18,.96);border:1px solid rgba(255,255,255,.15);
+      border-radius:18px;padding:14px;color:#fff;box-shadow:0 20px 70px rgba(0,0,0,.6)}
+    .card h3{margin:0 0 6px;font-size:18px}
+    .card p{margin:0 0 10px;opacity:.9;line-height:1.55;white-space:pre-line}
+    .row{display:flex;gap:10px;flex-wrap:wrap}
+    button{border-radius:14px;border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.08);
+      color:#fff;padding:10px 12px;font-size:15px;cursor:pointer}
+    button:active{transform:scale(.99)}
+    button[disabled]{opacity:.5;cursor:not-allowed}
+    .chip{display:inline-flex;align-items:center;gap:8px;padding:8px 10px;border-radius:999px;border:1px solid rgba(255,255,255,.14);background:rgba(0,0,0,.25)}
+    select{background:rgba(0,0,0,.35);color:#fff;border:1px solid rgba(255,255,255,.18);border-radius:12px;padding:9px 10px;font-size:15px}
+    .split{display:flex;gap:12px;flex-wrap:wrap;align-items:center;justify-content:space-between}
+    .small{font-size:13px;opacity:.85;line-height:1.55}
+  </style>
+</head>
+<body>
+<canvas id="c" width="960" height="560"></canvas>
+
+<div id="ui">
+  <div class="top">
+    <div class="panel">
+      <div class="line">
+        <div>❤️ <b id="hpT">100</b></div>
+        <div>🛡️ <b id="armorT">0</b></div>
+        <div>🤖 <b id="botT">-</b></div>
+        <div>🔫 <b id="gunT">PISTOL</b></div>
+        <div>🎯 <b id="ammoT">0/0</b></div>
+        <div>💣 <b id="fbT">0</b></div>
+        <div>🧰 <b id="medT">0</b></div>
+        <div>🧟 <b id="aliveT">0</b></div>
+        <div>🌊 <b id="waveT">1</b></div>
+        <div>🎯Kills <b id="killsT">0/10</b></div>
+        <div>⭐ <b id="scoreT">0</b></div>
+        <div class="chip">⛶ <b id="fsT">Off</b></div>
+      </div>
+    </div>
+
+    <div class="panel hint" id="hintBox">
+      حركة: <b>WASD</b> — جري: <b>Shift</b><br>
+      إطلاق: <b>Mouse</b> — Reload: <b>R</b><br>
+      Flash: <b>G</b> — Heal: <b>H</b><br>
+      قائمة اللعب: <b>M</b> — Fullscreen: <b>P</b>
+    </div>
+  </div>
+
+  <div class="panel bars">
+    <div class="bar">
+      <label><span>❤️ HP</span><span id="hpBarT">100</span></label>
+      <div class="track"><div class="fill" id="hpBar"></div></div>
+    </div>
+    <div class="bar">
+      <label><span>⚡ Stamina</span><span id="stBarT">100</span></label>
+      <div class="track"><div class="fill" id="stBar"></div></div>
+    </div>
+  </div>
+</div>
+
+<div id="bottomHint"></div>
+<div id="toast"></div>
+
+<!-- Main Menu -->
+<div id="menuOverlay" class="overlay">
+  <div class="card">
+    <div class="split">
+      <h3 id="menuTitle">Zombie 2D</h3>
+      <div class="row">
+        <button id="fsBtn">Fullscreen</button>
+      </div>
+    </div>
+
+    <p id="menuDesc" class="small"></p>
+
+    <div class="row" style="margin-bottom:10px">
+      <button id="playBtn">Play</button>
+      <button id="openShopBtn">Shop</button>
+      <button id="openOptBtn">Options</button>
+      <button id="resetBtn">Reset Save</button>
+      <button id="exitBtn">Exit</button>
+    </div>
+
+    <div class="row">
+      <span class="chip"><span id="langLbl">Language</span>
+        <select id="langSel">
+          <option value="ar">العربية</option>
+          <option value="en">English</option>
+        </select>
+      </span>
+
+      <span class="chip"><span id="diffLbl">Difficulty</span>
+        <select id="diffSel">
+          <option value="easy">Easy</option>
+          <option value="normal" selected>Normal</option>
+          <option value="hard">Hard</option>
+          <option value="insane">Impossible</option>
+        </select>
+      </span>
+
+      <span class="chip"><span id="bloodLbl">Blood</span>
+        <select id="bloodSel">
+          <option value="0">Off</option>
+          <option value="1">Low</option>
+          <option value="2" selected>Med</option>
+          <option value="3">High</option>
+        </select>
+      </span>
+    </div>
+
+    <p class="small" id="menuTip" style="margin-top:10px"></p>
+  </div>
+</div>
+
+<!-- In-Game Menu -->
+<div id="pauseOverlay" class="overlay">
+  <div class="card">
+    <h3 id="pauseTitle">Menu</h3>
+    <p class="small" id="pauseInfo"></p>
+    <div class="row" style="margin-top:10px">
+      <button id="resumeBtn">Resume</button>
+      <button id="pauseShopBtn">Shop</button>
+      <button id="pauseOptBtn">Options</button>
+      <button id="pauseToMainBtn">Exit to Main Menu</button>
+      <button id="pauseExitBtn">Exit</button>
+    </div>
+    <p class="small" id="pauseTip" style="margin-top:10px">Close: M</p>
+  </div>
+</div>
+
+<!-- Shop -->
+<div id="shopOverlay" class="overlay">
+  <div class="card">
+    <h3 id="shopTitle">Shop</h3>
+    <p id="shopInfo"></p>
+    <div class="row" id="shopBtns"></div>
+    <p class="small" id="shopTip">Close: M</p>
+  </div>
+</div>
+
+<!-- Options -->
+<div id="optOverlay" class="overlay">
+  <div class="card">
+    <h3 id="optTitle">Options</h3>
+    <p id="optInfo" class="small"></p>
+    <div class="row">
+      <span class="chip"><span id="optLangLbl">Language</span>
+        <select id="optLangSel">
+          <option value="ar">العربية</option>
+          <option value="en">English</option>
+        </select>
+      </span>
+
+      <span class="chip"><span id="optDiffLbl">Difficulty</span>
+        <select id="optDiffSel">
+          <option value="easy">Easy</option>
+          <option value="normal" selected>Normal</option>
+          <option value="hard">Hard</option>
+          <option value="insane">Impossible</option>
+        </select>
+      </span>
+
+      <span class="chip"><span id="optBloodLbl">Blood</span>
+        <select id="optBloodSel">
+          <option value="0">Off</option>
+          <option value="1">Low</option>
+          <option value="2" selected>Med</option>
+          <option value="3">High</option>
+        </select>
+      </span>
+    </div>
+
+    <div class="row" style="margin-top:10px">
+      <button id="optSaveBtn">Save</button>
+      <button id="optCloseBtn">Close</button>
+      <button id="optExitBtn">Exit</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const canvas = document.getElementById("c");
+  const ctx = canvas.getContext("2d");
+  const W = canvas.width, H = canvas.height;
+
+  const bottomHintEl = document.getElementById("bottomHint");
+  let bottomHintTimer = 0;
+  function showBottomHint(msg, ms=900){
+    bottomHintEl.textContent = msg;
+    bottomHintEl.style.opacity = "1";
+    bottomHintTimer = ms;
+  }
+
+  const el = {
+    hpT: document.getElementById("hpT"),
+    armorT: document.getElementById("armorT"),
+    botT: document.getElementById("botT"),
+    gunT: document.getElementById("gunT"),
+    ammoT: document.getElementById("ammoT"),
+    fbT: document.getElementById("fbT"),
+    medT: document.getElementById("medT"),
+    aliveT: document.getElementById("aliveT"),
+    waveT: document.getElementById("waveT"),
+    killsT: document.getElementById("killsT"),
+    scoreT: document.getElementById("scoreT"),
+    fsT: document.getElementById("fsT"),
+    hpBarT: document.getElementById("hpBarT"),
+    hpBar: document.getElementById("hpBar"),
+    stBarT: document.getElementById("stBarT"),
+    stBar: document.getElementById("stBar"),
+    hintBox: document.getElementById("hintBox"),
+  };
+
+  const toastEl = document.getElementById("toast");
+  let toastTimer = 0;
+  const toast = (msg, ms=1200)=>{ toastEl.textContent=msg; toastEl.style.opacity="1"; toastTimer=ms; };
+
+  const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+  const dist=(ax,ay,bx,by)=>Math.hypot(ax-bx, ay-by);
+
+  function setFill(elFill, elTxt, v){
+    v = clamp(v,0,100);
+    elTxt.textContent = Math.round(v);
+    elFill.style.width = v + "%";
+    elFill.style.background = v>55 ? "#5ef28c" : v>25 ? "#f2c94c" : "#f87171";
+  }
+
+  // i18n
+  const I18N = {
+    ar: {
+      title:"Zombie 2D",
+      desc:"ابدأ بمسدس فقط. افتح المتجر لشراء BOT وأسلحة وترقيات.\nHeadshot يعطي نقاط أكثر.",
+      tip:"Keys: M قائمة اللعب — P شاشة كاملة — G صاعقة — H علاج — R Reload",
+      play:"ابدأ",
+      shop:"المتجر",
+      options:"الإعدادات",
+      reset:"مسح الحفظ",
+      exit:"خروج",
+      lang:"اللغة",
+      diff:"الصعوبة",
+      blood:"الدم",
+      save:"حفظ",
+      close:"إغلاق",
+      pauseTitle:"قائمة اللعب",
+      resume:"كمل لعب",
+      toMain:"رجوع للواجهة",
+      shopTitle:"المتجر",
+      optInfo:"تقدر تقفل الدم أو ترفعه، وتختار الصعوبة واللغة.",
+      bought:"✅ تم الشراء",
+      noMoney:"❌ نقاطك ما تكفي",
+      locked:"🔒 اشتريه من المتجر",
+      shopBot:"استئجار BOT",
+      fixBot:"تصليح BOT",
+      botUpDmg:"ترقية BOT ديمج +20%",
+      botUpRate:"ترقية BOT إطلاق +15%",
+      botUpRange:"ترقية BOT مدى +60",
+      fsOn:"On", fsOff:"Off",
+      // ✅ new messages
+      reloadHint:"سوي Reload (R)",
+      reloadedOk:"تمت تعبئة الرصاص بنجاح"
+    },
+    en: {
+      title:"Zombie 2D",
+      desc:"You start with Pistol only. Open Shop to buy BOT, weapons and upgrades.\nHeadshots give extra points.",
+      tip:"Keys: M In-Game Menu — P Fullscreen — G Flash — H Heal — R Reload",
+      play:"Play",
+      shop:"Shop",
+      options:"Options",
+      reset:"Reset Save",
+      exit:"Exit",
+      lang:"Language",
+      diff:"Difficulty",
+      blood:"Blood",
+      save:"Save",
+      close:"Close",
+      pauseTitle:"In-Game Menu",
+      resume:"Resume",
+      toMain:"Exit to Main Menu",
+      shopTitle:"Shop",
+      optInfo:"You can disable blood and choose difficulty/language.",
+      bought:"✅ Purchased",
+      noMoney:"❌ Not enough points",
+      locked:"🔒 Buy it in Shop",
+      shopBot:"Hire BOT",
+      fixBot:"Fix BOT",
+      botUpDmg:"BOT dmg +20%",
+      botUpRate:"BOT fire rate +15%",
+      botUpRange:"BOT range +60",
+      fsOn:"On", fsOff:"Off",
+      // ✅ new messages
+      reloadHint:"Reload (R)",
+      reloadedOk:"Reloaded successfully"
+    }
+  };
+
+  const settings = { lang:"ar", difficulty:"normal", bloodLevel:2 };
+  const t = (k)=> (I18N[settings.lang]||I18N.ar)[k] ?? k;
+
+  const DIFF = {
+    easy:{ zHp:0.85,zSp:0.92,zDmg:0.78,reward:1.05,spawnAdj:-0.08 },
+    normal:{ zHp:1.00,zSp:1.00,zDmg:1.00,reward:1.00,spawnAdj: 0.00 },
+    hard:{ zHp:1.18,zSp:1.10,zDmg:1.22,reward:1.10,spawnAdj: 0.07 },
+    insane:{ zHp:1.45,zSp:1.22,zDmg:1.55,reward:1.20,spawnAdj: 0.12 },
+  };
+  const diffCfg = ()=> DIFF[settings.difficulty] || DIFF.normal;
+
+  // Save/Load
+  const SAVE_KEY="zombie2d_menu_save_v4";
+  function saveGame(){
+    try{
+      const data = { settings:{...settings}, sim:{...sim}, player:{...player}, bot:{...bot}, weaponsOwned:{...weaponsOwned}, gunKey, ammo:{mag:gunState.mag,reserve:gunState.reserve} };
+      localStorage.setItem(SAVE_KEY, JSON.stringify(data));
+    }catch{}
+  }
+  function loadGame(){
+    try{
+      const raw=localStorage.getItem(SAVE_KEY); if(!raw) return false;
+      const s=JSON.parse(raw); if(!s) return false;
+      if(s.settings){ settings.lang=s.settings.lang??settings.lang; settings.difficulty=s.settings.difficulty??settings.difficulty; settings.bloodLevel=s.settings.bloodLevel??settings.bloodLevel; }
+      if(s.sim) Object.assign(sim, s.sim);
+      if(s.player) Object.assign(player, s.player);
+      if(s.bot) Object.assign(bot, s.bot);
+      if(s.weaponsOwned){ weaponsOwned.pistol=true; weaponsOwned.smg=!!s.weaponsOwned.smg; weaponsOwned.shotgun=!!s.weaponsOwned.shotgun; }
+      if(s.gunKey && weaponsOwned[s.gunKey]) gunKey=s.gunKey;
+      resetAmmoForGun(true);
+      if(s.ammo){ gunState.mag=s.ammo.mag??gunState.mag; gunState.reserve=s.ammo.reserve??gunState.reserve; }
+      zombies.length=0; bullets.length=0; drops.length=0;
+      particles.blood.length=0; particles.sparks.length=0; particles.text.length=0;
+      fx.flash.active=false;
+      return true;
+    }catch{ return false; }
+  }
+  window.addEventListener("beforeunload", saveGame);
+  document.addEventListener("visibilitychange", ()=>{ if(document.visibilityState==="hidden") saveGame(); });
+
+  // Game state
+  const sim = { paused:false, started:false, over:false, score:0, wave:1, killsThisWave:0, killsToClear:10, spawnCooldown:0, maxAlive:2, camShake:0, hitFlash:0 };
+  const player = { x:W/2,y:H/2,r:14,hp:100,hpMax:100,armor:0,armorMax:80,stamina:100,staminaMax:100,speed:230,runMult:1.45,dmgMult:1,magBonus:0,medkits:1,flashbangs:1,flashCD:0 };
+  const bot = { hired:false,down:false,x:W/2-60,y:H/2+40,r:12,hp:70,hpMax:70,fireCD:0,fireRate:4,dmg:8,range:300,speed:190 };
+
+  const guns = {
+    pistol:{ name:"PISTOL",dmg:18,headMult:2.15,fireRate:7.5,mag:12,reserve:72,spread:0.03,pellets:1,reload:0.95,bulletSpeed:820 },
+    smg:{ name:"SMG",dmg:11,headMult:1.9,fireRate:13.5,mag:28,reserve:160,spread:0.06,pellets:1,reload:1.05,bulletSpeed:900 },
+    shotgun:{ name:"SHOTGUN",dmg:10,headMult:1.6,fireRate:1.7,mag:6,reserve:42,spread:0.18,pellets:6,reload:1.25,bulletSpeed:820 },
+  };
+  const weaponsOwned = { pistol:true, smg:false, shotgun:false };
+  let gunKey="pistol";
+  const gunState = { cd:0,reloading:false,reloadT:0,mag:12,reserve:72 };
+  const currentGun = ()=> guns[gunKey];
+
+  function resetAmmoForGun(full=true){
+    const g=currentGun();
+    const magMax=g.mag + player.magBonus;
+    if(full){ gunState.mag=magMax; gunState.reserve=g.reserve; }
+    gunState.mag=clamp(gunState.mag,0,magMax);
+    gunState.reserve=Math.max(0,gunState.reserve);
+    gunState.cd=0; gunState.reloading=false; gunState.reloadT=0;
+  }
+  function setGun(k){
+    if(!guns[k]) return;
+    if(!weaponsOwned[k]){ toast(t("locked")); return; }
+    gunKey=k; resetAmmoForGun(false); saveGame();
+  }
+
+  function reload(){
+    if(sim.paused||sim.over||!sim.started) return;
+    if(gunState.reloading) return;
+
+    const g=currentGun();
+    const magMax=g.mag+player.magBonus;
+    if(gunState.mag>=magMax || gunState.reserve<=0) return;
+
+    gunState.reloading=true;
+    gunState.reloadT=g.reload;
+  }
+
+  // World
+  const obstacles=[{x:240,y:190,w:120,h:40},{x:640,y:120,w:160,h:50},{x:420,y:380,w:140,h:55},{x:160,y:410,w:110,h:45},{x:720,y:360,w:120,h:40}];
+  const rectHitCircle=(rx,ry,rw,rh,cx,cy,cr)=>{ const px=clamp(cx,rx,rx+rw), py=clamp(cy,ry,ry+rh); return dist(px,py,cx,cy)<cr; };
+
+  // Entities
+  const zombies=[], bullets=[], drops=[];
+  const particles={ blood:[], sparks:[], text:[] };
+  const fx={ flash:{ active:false,x:0,y:0,t:0,life:0.35,radius:160,stun:2.7 } };
+
+  const isHeadshot=(z,bx,by)=>{ const hx=z.x, hy=z.y - z.r*0.65, hr=Math.max(6,z.r*0.42); return dist(hx,hy,bx,by)<=hr; };
+
+  function bloodBurst(x,y,n=6){
+    if(settings.bloodLevel<=0) return;
+    const mult=settings.bloodLevel===1?0.55:settings.bloodLevel===2?1.0:1.55;
+    const count=Math.max(1,Math.round(n*mult));
+    for(let k=0;k<count;k++){
+      const a=Math.random()*Math.PI*2, s=50+Math.random()*120;
+      particles.blood.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,r:2+Math.random()*2.6,t:0,life:0.20+Math.random()*0.25});
+    }
+  }
+  function muzzleBurst(x,y,ang){
+    for(let i=0;i<6;i++){
+      const a=ang+(Math.random()*2-1)*0.28, s=90+Math.random()*170;
+      particles.sparks.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,r:2+Math.random()*2.6,t:0,life:0.08+Math.random()*0.12});
+    }
+    particles.text.push({x:x+Math.cos(ang)*10,y:y+Math.sin(ang)*10,txt:"",t:0,life:0.06,kind:"flash",ang});
+  }
+  function maybeDrop(x,y){
+    const r=Math.random();
+    if(r<0.10) drops.push({x,y,type:"med",t:0,life:14});
+    else if(r<0.18) drops.push({x,y,type:"ammo",t:0,life:14});
+    else if(r<0.22) drops.push({x,y,type:"flash",t:0,life:14});
+  }
+  function pickupDrops(){
+    for(let i=drops.length-1;i>=0;i--){
+      const d=drops[i];
+      if(dist(d.x,d.y,player.x,player.y)<26){
+        if(d.type==="med") player.medkits=clamp(player.medkits+1,0,5);
+        else if(d.type==="ammo") gunState.reserve+=18;
+        else player.flashbangs=clamp(player.flashbangs+1,0,5);
+        drops.splice(i,1); saveGame();
+      }
+    }
+  }
+
+  function spawnZombie(){
+    const edge=(Math.random()*4)|0;
+    let x,y;
+    if(edge===0){x=-20;y=Math.random()*H;}
+    if(edge===1){x=W+20;y=Math.random()*H;}
+    if(edge===2){x=Math.random()*W;y=-20;}
+    if(edge===3){x=Math.random()*W;y=H+20;}
+
+    const roll=Math.random();
+    let type="normal";
+    if(sim.wave>=3 && roll<0.24) type="runner";
+    if(sim.wave>=5 && roll>0.86) type="tank";
+
+    const dcfg=diffCfg();
+    const baseHP=(56+sim.wave*7)*dcfg.zHp;
+    const baseSP=(60+sim.wave*2)*dcfg.zSp;
+
+    let hp=baseHP+Math.random()*12;
+    let sp=baseSP+Math.random()*10;
+    let rr=16;
+
+    if(type==="runner"){sp*=1.55;hp*=0.75;rr=15;}
+    else if(type==="tank"){sp*=0.72;hp*=2.25;rr=19;}
+
+    zombies.push({x,y,r:rr,hp,hpMax:hp,sp,type,hitT:0,stunT:0});
+  }
+
+  function useFlashbang(){
+    if(sim.paused||sim.over||!sim.started) return;
+    if(player.flashbangs<=0 || player.flashCD>0) return;
+    player.flashbangs--; player.flashCD=4.0;
+    fx.flash.active=true; fx.flash.x=player.x; fx.flash.y=player.y; fx.flash.t=0;
+    for(const z of zombies){
+      if(dist(z.x,z.y,fx.flash.x,fx.flash.y)<=fx.flash.radius){
+        z.stunT=Math.max(z.stunT, fx.flash.stun);
+        z.hitT=0.18;
+      }
+    }
+    saveGame();
+  }
+
+  function useMedkit(){
+    if(sim.paused||sim.over||!sim.started) return;
+    if(player.medkits<=0) return;
+    player.medkits--;
+    player.hp=clamp(player.hp+38,0,player.hpMax);
+    player.armor=clamp(player.armor+18,0,player.armorMax);
+    saveGame();
+  }
+
+  // Waves
+  function calcKillsToClear(wave){
+    if(wave===1) return 10;
+    const d=settings.difficulty;
+    if(d==="easy") return 12 + (wave-2)*3;
+    if(d==="normal") return 14 + (wave-2)*4;
+    if(d==="hard") return 16 + (wave-2)*5;
+    return 18 + (wave-2)*6;
+  }
+  function startWave(n){
+    sim.wave=n;
+    sim.killsThisWave=0;
+    sim.killsToClear=calcKillsToClear(n);
+    sim.maxAlive=clamp(2+Math.floor((n-1)/3),2,4);
+    sim.spawnCooldown=0.35 + Math.max(0, diffCfg().spawnAdj);
+    saveGame();
+  }
+  function updateWave(dt){
+    if(sim.over||!sim.started) return;
+    sim.spawnCooldown -= dt;
+
+    if(sim.killsThisWave < sim.killsToClear && zombies.length < sim.maxAlive && sim.spawnCooldown <= 0){
+      spawnZombie();
+      const base=1.25, adj=clamp(0.04*sim.wave,0,0.55), diffExtra=diffCfg().spawnAdj;
+      sim.spawnCooldown=(base - adj + diffExtra) + Math.random()*0.40;
+    }
+    if(sim.killsThisWave >= sim.killsToClear && zombies.length===0){
+      startWave(sim.wave+1);
+    }
+  }
+
+  // Input
+  const keys=new Set();
+  let mouse={x:W/2,y:H/2,down:false};
+
+  window.addEventListener("keydown",(e)=>{
+    const k=e.key.toLowerCase();
+    keys.add(k);
+
+    if(k==="p"){ toggleFullscreen(); return; }
+
+    if(k==="m"){
+      if(isAnyOverlayOpen()) closeTopOverlay();
+      else if(sim.started && !sim.over) openPauseMenu();
+      else showMainMenu();
+      return;
+    }
+
+    if(k==="r") reload();
+    if(k==="1") setGun("pistol");
+    if(k==="2") setGun("smg");
+    if(k==="3") setGun("shotgun");
+    if(k==="g") useFlashbang();
+    if(k==="h") useMedkit();
+  });
+  window.addEventListener("keyup",(e)=>keys.delete(e.key.toLowerCase()));
+  const downKey=(k)=>keys.has(k);
+
+  canvas.addEventListener("mousemove",(e)=>{
+    const r=canvas.getBoundingClientRect();
+    mouse.x=(e.clientX-r.left)*(canvas.width/r.width);
+    mouse.y=(e.clientY-r.top)*(canvas.height/r.height);
+  });
+  canvas.addEventListener("mousedown",()=>mouse.down=true);
+  window.addEventListener("mouseup",()=>mouse.down=false);
+
+  // Player update
+  function updatePlayer(dt){
+    if(sim.paused||sim.over||!sim.started) return;
+
+    player.stamina=clamp(player.stamina+22*dt,0,player.staminaMax);
+
+    let mx=0,my=0;
+    if(downKey("w")||downKey("arrowup")) my-=1;
+    if(downKey("s")||downKey("arrowdown")) my+=1;
+    if(downKey("a")||downKey("arrowleft")) mx-=1;
+    if(downKey("d")||downKey("arrowright")) mx+=1;
+
+    const len=Math.hypot(mx,my);
+    if(len>0){ mx/=len; my/=len; }
+
+    const run=downKey("shift") && player.stamina>5;
+    let sp=player.speed*(run?player.runMult:1);
+    if(run && len>0) player.stamina=clamp(player.stamina-28*dt,0,player.staminaMax);
+
+    let nx=player.x+mx*sp*dt;
+    let ny=player.y+my*sp*dt;
+
+    for(const ob of obstacles){
+      if(rectHitCircle(ob.x,ob.y,ob.w,ob.h,nx,ny,player.r)){
+        if(!rectHitCircle(ob.x,ob.y,ob.w,ob.h,nx,player.y,player.r)) ny=player.y;
+        else if(!rectHitCircle(ob.x,ob.y,ob.w,ob.h,player.x,ny,player.r)) nx=player.x;
+        else { nx=player.x; ny=player.y; }
+      }
+    }
+
+    player.x=clamp(nx,player.r,W-player.r);
+    player.y=clamp(ny,player.r,H-player.r);
+  }
+
+  // Shooting
+  function shoot(dt){
+    if(sim.paused||sim.over||!sim.started) return;
+    const g=currentGun();
+
+    if(gunState.reloading){
+      gunState.reloadT -= dt;
+      if(gunState.reloadT<=0){
+        const magMax=g.mag+player.magBonus;
+        const need=magMax-gunState.mag;
+        const take=Math.min(need, gunState.reserve);
+        gunState.mag += take;
+        gunState.reserve -= take;
+        gunState.reloading=false;
+        saveGame();
+        // ✅ message after reload finished
+        showBottomHint(t("reloadedOk"), 900);
+      }
+      return;
+    }
+
+    gunState.cd=Math.max(0, gunState.cd-dt);
+
+    // ✅ show hint if out of ammo
+    const magMax = g.mag + player.magBonus;
+    if(gunState.mag<=0 && gunState.reserve>0 && !gunState.reloading && sim.started && !sim.paused && !sim.over){
+      showBottomHint(t("reloadHint"), 450);
+    }
+
+    if(!mouse.down || gunState.cd>0) return;
+    if(gunState.mag<=0) return;
+
+    gunState.mag--;
+    gunState.cd=1/g.fireRate;
+
+    const angBase=Math.atan2(mouse.y-player.y, mouse.x-player.x);
+    const mx=player.x+Math.cos(angBase)*(player.r+6);
+    const my=player.y+Math.sin(angBase)*(player.r+6);
+    muzzleBurst(mx,my,angBase);
+
+    sim.camShake=Math.min(1.0, sim.camShake+0.18);
+
+    for(let i=0;i<g.pellets;i++){
+      const spread=(Math.random()*2-1)*g.spread;
+      const ang=angBase+spread;
+      const spd=g.bulletSpeed;
+      bullets.push({x:player.x+Math.cos(ang)*(player.r+6),y:player.y+Math.sin(ang)*(player.r+6),vx:Math.cos(ang)*spd,vy:Math.sin(ang)*spd,r:3,dmg:g.dmg*player.dmgMult,headDmg:g.dmg*g.headMult*player.dmgMult,t:0,life:0.95,fromBot:false});
+    }
+  }
+
+  function botUpdate(dt){
+    if(!bot.hired||bot.down||sim.paused||sim.over||!sim.started) return;
+
+    const tx=player.x-44, ty=player.y+44;
+    let dx=tx-bot.x, dy=ty-bot.y;
+    const d=Math.hypot(dx,dy);
+
+    if(d>8){
+      dx/=(d||1); dy/=(d||1);
+      let nx=bot.x+dx*bot.speed*dt;
+      let ny=bot.y+dy*bot.speed*dt;
+
+      for(const ob of obstacles){
+        if(rectHitCircle(ob.x,ob.y,ob.w,ob.h,nx,ny,bot.r)){
+          if(!rectHitCircle(ob.x,ob.y,ob.w,ob.h,nx,bot.y,bot.r)) ny=bot.y;
+          else if(!rectHitCircle(ob.x,ob.y,ob.w,ob.h,bot.x,ny,bot.r)) nx=bot.x;
+          else { nx=bot.x; ny=bot.y; }
+        }
+      }
+      bot.x=clamp(nx,bot.r,W-bot.r);
+      bot.y=clamp(ny,bot.r,H-bot.r);
+    }
+
+    let best=null, bestD=1e9;
+    for(const z of zombies){
+      const dd=dist(bot.x,bot.y,z.x,z.y);
+      if(dd<bestD && dd<=bot.range){ bestD=dd; best=z; }
+    }
+
+    bot.fireCD=Math.max(0, bot.fireCD-dt);
+    if(best && bot.fireCD<=0){
+      bot.fireCD=1/bot.fireRate;
+      const ang=Math.atan2(best.y-bot.y, best.x-bot.x);
+      muzzleBurst(bot.x+Math.cos(ang)*(bot.r+6), bot.y+Math.sin(ang)*(bot.r+6), ang);
+      bullets.push({x:bot.x+Math.cos(ang)*(bot.r+6),y:bot.y+Math.sin(ang)*(bot.r+6),vx:Math.cos(ang)*760,vy:Math.sin(ang)*760,r:2.6,dmg:bot.dmg,headDmg:bot.dmg*1.6,t:0,life:0.85,fromBot:true});
+    }
+
+    for(const z of zombies){
+      if(dist(z.x,z.y,bot.x,bot.y) < z.r+bot.r+2){
+        bot.hp -= (6.5 + sim.wave*0.22) * dt;
+        if(bot.hp<=0){ bot.hp=0; bot.down=true; saveGame(); break; }
+      }
+    }
+  }
+
+  function updateBullets(dt){
+    for(const b of bullets){ b.t+=dt; b.x+=b.vx*dt; b.y+=b.vy*dt; }
+
+    for(let i=bullets.length-1;i>=0;i--){
+      const b=bullets[i];
+      if(b.t>b.life || b.x<-60||b.x>W+60||b.y<-60||b.y>H+60){ bullets.splice(i,1); continue; }
+
+      let hit=false;
+      for(const ob of obstacles){
+        if(b.x>ob.x && b.x<ob.x+ob.w && b.y>ob.y && b.y<ob.y+ob.h){ hit=true; break; }
+      }
+      if(!hit){
+        for(const z of zombies){
+          if(dist(b.x,b.y,z.x,z.y) < z.r+b.r){
+            const hs=isHeadshot(z,b.x,b.y);
+            z.hp -= hs ? b.headDmg : b.dmg;
+            z.hitT=0.10;
+            bloodBurst(z.x,z.y, hs?9:6);
+            sim.camShake=Math.min(1.0, sim.camShake + (hs?0.16:0.08));
+            if(hs && !b.fromBot) sim.score += 16;
+            hit=true; break;
+          }
+        }
+      }
+      if(hit) bullets.splice(i,1);
+    }
+  }
+
+  function updateZombies(dt){
+    const dcfg=diffCfg();
+
+    for(const z of zombies){
+      z.hitT=Math.max(0,z.hitT-dt);
+      z.stunT=Math.max(0,z.stunT-dt);
+      if(z.stunT>0) continue;
+
+      let dx=player.x-z.x, dy=player.y-z.y;
+      const len=Math.hypot(dx,dy)||1;
+      dx/=len; dy/=len;
+
+      let nx=z.x+dx*z.sp*dt;
+      let ny=z.y+dy*z.sp*dt;
+
+      for(const ob of obstacles){
+        if(rectHitCircle(ob.x,ob.y,ob.w,ob.h,nx,ny,z.r)){
+          if(!rectHitCircle(ob.x,ob.y,ob.w,ob.h,z.x+dx*z.sp*dt,z.y,z.r)) ny=z.y;
+          else if(!rectHitCircle(ob.x,ob.y,ob.w,ob.h,z.x,z.y+dy*z.sp*dt,z.r)) nx=z.x;
+          else { nx=z.x; ny=z.y; }
+        }
+      }
+      z.x=nx; z.y=ny;
+
+      if(dist(z.x,z.y,player.x,player.y) < z.r+player.r+2){
+        let dmg=(8.2 + sim.wave*0.42)*dt;
+        if(z.type==="runner") dmg*=1.05;
+        if(z.type==="tank") dmg*=1.25;
+        dmg*=dcfg.zDmg;
+
+        if(player.armor>0){
+          const take=Math.min(player.armor, dmg*8.0);
+          player.armor -= take;
+          dmg *= 0.18;
+        }
+        player.hp -= dmg;
+        sim.hitFlash=Math.min(1, sim.hitFlash + dt*3.2);
+        sim.camShake=Math.min(1.0, sim.camShake + 0.10);
+      }
+    }
+
+    for(let i=zombies.length-1;i>=0;i--){
+      if(zombies[i].hp<=0){
+        const zx=zombies[i].x, zy=zombies[i].y;
+        const type=zombies[i].type;
+        zombies.splice(i,1);
+
+        const base=(22 + sim.wave*2)*diffCfg().reward;
+        const bonus= type==="runner"?10 : type==="tank"?18 : 0;
+        sim.score += Math.floor(base+bonus);
+        sim.killsThisWave++;
+
+        maybeDrop(zx,zy);
+        saveGame();
+      }
+    }
+
+    if(player.hp<=0 && !sim.over){
+      player.hp=0;
+      sim.over=true;
+      sim.paused=true;
+      showMainMenu();
+      saveGame();
+    }
+  }
+
+  function updateDrops(dt){
+    for(const d of drops) d.t += dt;
+    for(let i=drops.length-1;i>=0;i--) if(drops[i].t >= drops[i].life) drops.splice(i,1);
+    pickupDrops();
+  }
+
+  function updateParticles(dt){
+    for(const p of particles.blood){
+      p.t+=dt; p.x+=p.vx*dt; p.y+=p.vy*dt;
+      p.vx*=Math.pow(0.06,dt); p.vy*=Math.pow(0.06,dt);
+    }
+    for(let i=particles.blood.length-1;i>=0;i--) if(particles.blood[i].t>=particles.blood[i].life) particles.blood.splice(i,1);
+
+    for(const s of particles.sparks){
+      s.t+=dt; s.x+=s.vx*dt; s.y+=s.vy*dt;
+      s.vx*=Math.pow(0.02,dt); s.vy*=Math.pow(0.02,dt);
+    }
+    for(let i=particles.sparks.length-1;i>=0;i--) if(particles.sparks[i].t>=particles.sparks[i].life) particles.sparks.splice(i,1);
+
+    for(const tt of particles.text) tt.t += dt;
+    for(let i=particles.text.length-1;i>=0;i--) if(particles.text[i].t>=particles.text[i].life) particles.text.splice(i,1);
+  }
+
+  function updateFX(dt){
+    player.flashCD=Math.max(0, player.flashCD-dt);
+    if(fx.flash.active){
+      fx.flash.t+=dt;
+      if(fx.flash.t>=fx.flash.life) fx.flash.active=false;
+    }
+  }
+
+  // ✅ small helper to draw zombie hp bars
+  function drawZombieHP(z){
+    const w = 34 + z.r*1.2;
+    const h = 6;
+    const x = z.x - w/2;
+    const y = z.y - z.r - 14;
+    const p = clamp(z.hp / z.hpMax, 0, 1);
+
+    ctx.globalAlpha = 0.9;
+    ctx.fillStyle = "rgba(0,0,0,.55)";
+    ctx.fillRect(x, y, w, h);
+
+    ctx.fillStyle = "rgba(94,242,140,.95)";
+    ctx.fillRect(x, y, w*p, h);
+
+    ctx.strokeStyle = "rgba(255,255,255,.18)";
+    ctx.strokeRect(x, y, w, h);
+    ctx.globalAlpha = 1;
+  }
+
+  // Draw (with aim arrow + zombie hp bars)
+  function draw(){
+    let sx=0, sy=0;
+    if(sim.camShake>0){
+      const mag=sim.camShake*6;
+      sx=(Math.random()*2-1)*mag;
+      sy=(Math.random()*2-1)*mag;
+    }
+
+    ctx.setTransform(1,0,0,1,0,0);
+    ctx.clearRect(0,0,W,H);
+
+    ctx.fillStyle="#0b1020";
+    ctx.fillRect(0,0,W,H);
+
+    ctx.globalAlpha=0.10;
+    ctx.strokeStyle="#fff";
+    for(let x=0;x<W;x+=40){ ctx.beginPath(); ctx.moveTo(x+sx,0+sy); ctx.lineTo(x+sx,H+sy); ctx.stroke(); }
+    for(let y=0;y<H;y+=40){ ctx.beginPath(); ctx.moveTo(0+sx,y+sy); ctx.lineTo(W+sx,H+sy); ctx.stroke(); }
+    ctx.globalAlpha=1;
+
+    ctx.setTransform(1,0,0,1,sx,sy);
+
+    for(const ob of obstacles){
+      ctx.fillStyle="rgba(0,0,0,.35)";
+      ctx.fillRect(ob.x,ob.y,ob.w,ob.h);
+      ctx.strokeStyle="rgba(255,255,255,.12)";
+      ctx.strokeRect(ob.x,ob.y,ob.w,ob.h);
+    }
+
+    for(const d of drops){
+      ctx.beginPath();
+      ctx.fillStyle = d.type==="med" ? "rgba(94,242,140,.85)" : d.type==="ammo" ? "rgba(147,197,253,.85)" : "rgba(251,191,36,.88)";
+      ctx.arc(d.x,d.y,10,0,Math.PI*2); ctx.fill();
+    }
+
+    if(settings.bloodLevel>0){
+      ctx.globalAlpha=0.75;
+      ctx.fillStyle="rgba(239,68,68,.85)";
+      for(const p of particles.blood){ ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2); ctx.fill(); }
+      ctx.globalAlpha=1;
+    }
+
+    ctx.globalAlpha=0.9;
+    ctx.fillStyle="rgba(251,191,36,.9)";
+    for(const s of particles.sparks){ ctx.beginPath(); ctx.arc(s.x,s.y,s.r,0,Math.PI*2); ctx.fill(); }
+    ctx.globalAlpha=1;
+
+    for(const ttt of particles.text){
+      if(ttt.kind==="flash"){
+        const a=1-(ttt.t/ttt.life);
+        ctx.globalAlpha=0.35*a;
+        ctx.fillStyle="rgba(251,191,36,1)";
+        const ang=ttt.ang||0;
+        ctx.beginPath();
+        ctx.moveTo(ttt.x,ttt.y);
+        ctx.lineTo(ttt.x+Math.cos(ang-0.25)*22, ttt.y+Math.sin(ang-0.25)*22);
+        ctx.lineTo(ttt.x+Math.cos(ang+0.25)*22, ttt.y+Math.sin(ang+0.25)*22);
+        ctx.closePath(); ctx.fill();
+        ctx.globalAlpha=1;
+      }
+    }
+
+    for(const b of bullets){
+      ctx.fillStyle=b.fromBot?"rgba(147,197,253,.95)":"rgba(255,255,255,.95)";
+      ctx.beginPath(); ctx.arc(b.x,b.y,b.r,0,Math.PI*2); ctx.fill();
+    }
+
+    for(const z of zombies){
+      let col="rgba(167,243,208,.92)";
+      if(z.type==="runner") col="rgba(191,219,254,.92)";
+      if(z.type==="tank") col="rgba(253,230,138,.92)";
+      if(z.stunT>0) col="rgba(216,180,254,.92)";
+      if(z.hitT>0) col="rgba(248,113,113,.95)";
+      ctx.fillStyle=col;
+      ctx.beginPath(); ctx.arc(z.x,z.y,z.r,0,Math.PI*2); ctx.fill();
+
+      // ✅ zombie health bar
+      drawZombieHP(z);
+    }
+
+    if(bot.hired){
+      ctx.fillStyle=bot.down?"rgba(148,163,184,.7)":"rgba(147,197,253,.95)";
+      ctx.beginPath(); ctx.arc(bot.x,bot.y,bot.r,0,Math.PI*2); ctx.fill();
+    }
+
+    // player
+    ctx.fillStyle="rgba(74,222,128,.96)";
+    ctx.beginPath(); ctx.arc(player.x,player.y,player.r,0,Math.PI*2); ctx.fill();
+
+    // aim arrow
+    const ang = Math.atan2(mouse.y - player.y, mouse.x - player.x);
+    const ax = player.x + Math.cos(ang)*54;
+    const ay = player.y + Math.sin(ang)*54;
+    const left = ang - 2.65, right = ang + 2.65;
+    ctx.globalAlpha = 0.55;
+    ctx.strokeStyle = "#fff";
+    ctx.beginPath();
+    ctx.moveTo(player.x, player.y);
+    ctx.lineTo(ax, ay);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(ax, ay);
+    ctx.lineTo(ax + Math.cos(left)*10, ay + Math.sin(left)*10);
+    ctx.moveTo(ax, ay);
+    ctx.lineTo(ax + Math.cos(right)*10, ay + Math.sin(right)*10);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+
+    if(sim.hitFlash>0){
+      const a=clamp(sim.hitFlash,0,1)*0.22;
+      ctx.setTransform(1,0,0,1,0,0);
+      ctx.fillStyle=`rgba(255,80,80,${a})`;
+      ctx.fillRect(0,0,W,H);
+    }
+  }
+
+  function update(dt){
+    // bottom hint timer
+    if(bottomHintTimer>0){
+      bottomHintTimer -= dt*1000;
+      if(bottomHintTimer<=0) bottomHintEl.style.opacity="0";
+    }
+
+    sim.camShake=Math.max(0, sim.camShake - dt*2.6);
+    sim.hitFlash=Math.max(0, sim.hitFlash - dt*3.0);
+
+    updateFX(dt);
+    updateParticles(dt);
+
+    if(sim.paused) return;
+
+    updatePlayer(dt);
+    shoot(dt);
+    botUpdate(dt);
+    updateBullets(dt);
+    updateZombies(dt);
+    updateDrops(dt);
+    updateWave(dt);
+
+    // UI
+    el.hpT.textContent=Math.ceil(player.hp);
+    el.armorT.textContent=Math.ceil(player.armor);
+    el.botT.textContent=!bot.hired?"-":(bot.down?"DOWN":`${Math.ceil(bot.hp)}/${bot.hpMax}`);
+    el.gunT.textContent=currentGun().name;
+    el.ammoT.textContent=`${gunState.mag}/${gunState.reserve}`;
+    el.fbT.textContent=player.flashbangs;
+    el.medT.textContent=player.medkits;
+    el.waveT.textContent=sim.wave;
+    el.killsT.textContent=`${sim.killsThisWave}/${sim.killsToClear}`;
+    el.scoreT.textContent=Math.floor(sim.score);
+    el.aliveT.textContent=zombies.length;
+    setFill(el.hpBar, el.hpBarT, (player.hp/player.hpMax)*100);
+    setFill(el.stBar, el.stBarT, (player.stamina/player.staminaMax)*100);
+
+    autosave -= dt;
+    if(autosave<=0){ autosave=8; saveGame(); }
+  }
+
+  // Overlays wiring (same as قبل)
+  const menuOverlay=document.getElementById("menuOverlay");
+  const pauseOverlay=document.getElementById("pauseOverlay");
+  const shopOverlay=document.getElementById("shopOverlay");
+  const optOverlay=document.getElementById("optOverlay");
+
+  const menuTitle=document.getElementById("menuTitle");
+  const menuDesc=document.getElementById("menuDesc");
+  const menuTip=document.getElementById("menuTip");
+  const playBtn=document.getElementById("playBtn");
+  const openShopBtn=document.getElementById("openShopBtn");
+  const openOptBtn=document.getElementById("openOptBtn");
+  const resetBtn=document.getElementById("resetBtn");
+  const exitBtn=document.getElementById("exitBtn");
+  const fsBtn=document.getElementById("fsBtn");
+
+  const langSel=document.getElementById("langSel");
+  const diffSel=document.getElementById("diffSel");
+  const bloodSel=document.getElementById("bloodSel");
+
+  const pauseTitle=document.getElementById("pauseTitle");
+  const pauseInfo=document.getElementById("pauseInfo");
+  const resumeBtn=document.getElementById("resumeBtn");
+  const pauseShopBtn=document.getElementById("pauseShopBtn");
+  const pauseOptBtn=document.getElementById("pauseOptBtn");
+  const pauseToMainBtn=document.getElementById("pauseToMainBtn");
+  const pauseExitBtn=document.getElementById("pauseExitBtn");
+
+  const shopTitle=document.getElementById("shopTitle");
+  const shopInfo=document.getElementById("shopInfo");
+  const shopBtns=document.getElementById("shopBtns");
+
+  const optTitle=document.getElementById("optTitle");
+  const optInfo=document.getElementById("optInfo");
+  const optLangSel=document.getElementById("optLangSel");
+  const optDiffSel=document.getElementById("optDiffSel");
+  const optBloodSel=document.getElementById("optBloodSel");
+  const optSaveBtn=document.getElementById("optSaveBtn");
+  const optCloseBtn=document.getElementById("optCloseBtn");
+  const optExitBtn=document.getElementById("optExitBtn");
+
+  function hideAll(){ menuOverlay.style.display="none"; pauseOverlay.style.display="none"; shopOverlay.style.display="none"; optOverlay.style.display="none"; }
+  function isAnyOverlayOpen(){ return menuOverlay.style.display==="flex" || pauseOverlay.style.display==="flex" || shopOverlay.style.display==="flex" || optOverlay.style.display==="flex"; }
+  function closeTopOverlay(){
+    if(optOverlay.style.display==="flex"){ optOverlay.style.display="none"; openPauseMenu(); return; }
+    if(shopOverlay.style.display==="flex"){ shopOverlay.style.display="none"; openPauseMenu(); return; }
+    if(pauseOverlay.style.display==="flex"){ pauseOverlay.style.display="none"; sim.paused=false; return; }
+    if(menuOverlay.style.display==="flex"){ menuOverlay.style.display="none"; sim.paused=false; return; }
+  }
+
+  function applyTexts(){
+    document.documentElement.lang = settings.lang==="ar" ? "ar" : "en";
+    document.documentElement.dir  = settings.lang==="ar" ? "rtl" : "ltr";
+    menuTitle.textContent=t("title");
+    menuDesc.textContent=t("desc");
+    menuTip.textContent=t("tip");
+    playBtn.textContent=t("play");
+    openShopBtn.textContent=t("shop");
+    openOptBtn.textContent=t("options");
+    resetBtn.textContent=t("reset");
+    exitBtn.textContent=t("exit");
+
+    pauseTitle.textContent=t("pauseTitle");
+    resumeBtn.textContent=t("resume");
+    pauseShopBtn.textContent=t("shop");
+    pauseOptBtn.textContent=t("options");
+    pauseToMainBtn.textContent=t("toMain");
+    pauseExitBtn.textContent=t("exit");
+
+    shopTitle.textContent=t("shopTitle");
+
+    optTitle.textContent=t("options");
+    optInfo.textContent=t("optInfo");
+    optSaveBtn.textContent=t("save");
+    optCloseBtn.textContent=t("close");
+    optExitBtn.textContent=t("exit");
+
+    el.hintBox.innerHTML = (settings.lang==="ar")
+      ? `حركة: <b>WASD</b> — جري: <b>Shift</b><br>إطلاق: <b>Mouse</b> — Reload: <b>R</b><br>Flash: <b>G</b> — Heal: <b>H</b><br>قائمة اللعب: <b>M</b> — Fullscreen: <b>P</b>`
+      : `Move: <b>WASD</b> — Run: <b>Shift</b><br>Shoot: <b>Mouse</b> — Reload: <b>R</b><br>Flash: <b>G</b> — Heal: <b>H</b><br>In-Game Menu: <b>M</b> — Fullscreen: <b>P</b>`;
+  }
+
+  function syncSelectors(){
+    langSel.value=settings.lang;
+    diffSel.value=settings.difficulty;
+    bloodSel.value=String(settings.bloodLevel);
+    optLangSel.value=settings.lang;
+    optDiffSel.value=settings.difficulty;
+    optBloodSel.value=String(settings.bloodLevel);
+  }
+
+  function showMainMenu(){
+    hideAll();
+    menuOverlay.style.display="flex";
+    sim.paused=true;
+    applyTexts();
+    syncSelectors();
+    saveGame();
+  }
+
+  function openPauseMenu(){
+    if(!sim.started || sim.over){ showMainMenu(); return; }
+    hideAll();
+    pauseOverlay.style.display="flex";
+    sim.paused=true;
+    applyTexts();
+    pauseInfo.textContent = `Wave: ${sim.wave} | Kills: ${sim.killsThisWave}/${sim.killsToClear} | Score: ${Math.floor(sim.score)}`;
+    saveGame();
+  }
+
+  function openShopFromPause(){
+    hideAll();
+    shopOverlay.style.display="flex";
+    sim.paused=true;
+    renderShop();
+    saveGame();
+  }
+
+  function openOptionsFromPause(){
+    hideAll();
+    optOverlay.style.display="flex";
+    sim.paused=true;
+    applyTexts();
+    syncSelectors();
+    saveGame();
+  }
+
+  function renderShop(){
+    const g=currentGun();
+    const magMax=g.mag + player.magBonus;
+    const botStatus = !bot.hired ? "—" : (bot.down ? "DOWN" : `${Math.ceil(bot.hp)}/${bot.hpMax}`);
+
+    shopInfo.textContent =
+`⭐ ${Math.floor(sim.score)}
+🌊 ${sim.wave} | Kills: ${sim.killsThisWave}/${sim.killsToClear}
+🔫 ${g.name} | ${gunState.mag}/${gunState.reserve} (Mag ${magMax})
+🧰 ${player.medkits} | 💣 ${player.flashbangs}
+🤖 ${botStatus}`;
+
+    shopBtns.innerHTML="";
+
+    const buy=(label,cost,fn,disabled=false)=>{
+      const b=document.createElement("button");
+      b.textContent=`${label} — (${cost}⭐)`;
+      b.disabled=disabled;
+      b.onclick=()=>{
+        if(disabled) return;
+        if(sim.score<cost){ toast(t("noMoney")); return; }
+        sim.score-=cost;
+        fn();
+        toast(t("bought"));
+        saveGame();
+        renderShop();
+      };
+      shopBtns.appendChild(b);
+    };
+
+    buy("SMG", 320, ()=>{ weaponsOwned.smg=true; gunKey="smg"; resetAmmoForGun(true); }, weaponsOwned.smg);
+    buy("Shotgun", 520, ()=>{ weaponsOwned.shotgun=true; gunKey="shotgun"; resetAmmoForGun(true); }, weaponsOwned.shotgun);
+    buy("Ammo +40", 140, ()=>{ gunState.reserve += 40; });
+    buy("Medkit +1", 180, ()=>{ player.medkits=clamp(player.medkits+1,0,5); }, player.medkits>=5);
+    buy("Flash +1", 220, ()=>{ player.flashbangs=clamp(player.flashbangs+1,0,5); }, player.flashbangs>=5);
+    buy("HP +20", 420, ()=>{ player.hpMax+=20; player.hp=clamp(player.hp+20,0,player.hpMax); });
+    buy("Armor +20", 380, ()=>{ player.armorMax+=20; player.armor=clamp(player.armor+20,0,player.armorMax); });
+    buy("Speed +8%", 360, ()=>{ player.speed*=1.08; });
+    buy("Damage +10%", 440, ()=>{ player.dmgMult*=1.10; });
+    buy("Mag +2", 340, ()=>{ player.magBonus+=2; gunState.mag=clamp(gunState.mag,0,currentGun().mag+player.magBonus); });
+
+    buy(t("shopBot"), 650, ()=>{
+      bot.hired=true; bot.down=false;
+      bot.hpMax=70; bot.hp=70;
+      bot.fireRate=4.0; bot.dmg=8; bot.range=300;
+      bot.x=player.x-60; bot.y=player.y+40;
+    }, bot.hired);
+
+    buy(t("fixBot"), 220, ()=>{ bot.down=false; bot.hp=bot.hpMax*0.75; }, !bot.hired || !bot.down);
+    buy(t("botUpDmg"), 260, ()=>{ bot.dmg*=1.20; }, !bot.hired);
+    buy(t("botUpRate"), 300, ()=>{ bot.fireRate*=1.15; }, !bot.hired);
+    buy(t("botUpRange"), 240, ()=>{ bot.range+=60; }, !bot.hired);
+
+    const close=document.createElement("button");
+    close.textContent=t("close");
+    close.onclick=()=>openPauseMenu();
+    shopBtns.appendChild(close);
+  }
+
+  // Buttons
+  playBtn.onclick=()=>{
+    sim.over=false;
+    sim.started=true;
+    sim.paused=false;
+    player.x=W/2; player.y=H/2;
+    if(player.hp<=0) player.hp = 100;
+    zombies.length=0; bullets.length=0; drops.length=0;
+    startWave(1);
+    hideAll();
+    saveGame();
+  };
+  openShopBtn.onclick=()=>openShopFromPause();
+  openOptBtn.onclick=()=>openOptionsFromPause();
+
+  resetBtn.onclick=()=>{
+    localStorage.removeItem(SAVE_KEY);
+    sim.started=false; sim.over=false; sim.score=0;
+    weaponsOwned.pistol=true; weaponsOwned.smg=false; weaponsOwned.shotgun=false;
+    gunKey="pistol"; resetAmmoForGun(true);
+    bot.hired=false; bot.down=false; bot.hp=bot.hpMax;
+    Object.assign(player,{ x:W/2,y:H/2,hpMax:100,hp:100,armorMax:80,armor:0,staminaMax:100,stamina:100,speed:230,runMult:1.45,dmgMult:1,magBonus:0,medkits:1,flashbangs:1,flashCD:0 });
+    zombies.length=0; bullets.length=0; drops.length=0;
+    startWave(1);
+    showMainMenu();
+  };
+
+  function tryExit(){
+    saveGame();
+    window.close();
+    toast("إذا ما قفل: اقفل التبويب بنفسك ✅", 1600);
+  }
+
+  exitBtn.onclick = ()=> tryExit();
+  pauseExitBtn.onclick = ()=> tryExit();
+  optExitBtn.onclick = ()=> tryExit();
+
+  resumeBtn.onclick=()=>{ hideAll(); sim.paused=false; saveGame(); };
+  pauseShopBtn.onclick=()=>openShopFromPause();
+  pauseOptBtn.onclick=()=>openOptionsFromPause();
+  pauseToMainBtn.onclick=()=>showMainMenu();
+
+  // settings selectors
+  langSel.onchange=()=>{ settings.lang=langSel.value; applyTexts(); syncSelectors(); saveGame(); };
+  diffSel.onchange=()=>{ settings.difficulty=diffSel.value; saveGame(); };
+  bloodSel.onchange=()=>{ settings.bloodLevel=parseInt(bloodSel.value,10)||0; saveGame(); };
+
+  optSaveBtn.onclick=()=>{
+    settings.lang=optLangSel.value;
+    settings.difficulty=optDiffSel.value;
+    settings.bloodLevel=parseInt(optBloodSel.value,10)||0;
+    applyTexts(); syncSelectors(); saveGame();
+    openPauseMenu();
+  };
+  optCloseBtn.onclick=()=>openPauseMenu();
+
+  // Fullscreen
+  const isFullscreen=()=>!!document.fullscreenElement;
+  async function toggleFullscreen(){
+    try{
+      if(!isFullscreen()) await document.documentElement.requestFullscreen?.();
+      else await document.exitFullscreen?.();
+    }catch{}
+    el.fsT.textContent = isFullscreen() ? t("fsOn") : t("fsOff");
+  }
+  document.addEventListener("fullscreenchange", ()=>{ el.fsT.textContent=isFullscreen()?t("fsOn"):t("fsOff"); });
+  fsBtn.onclick=()=>toggleFullscreen();
+
+  // Loop
+  let last=performance.now();
+  let autosave=6;
+
+  function loop(now){
+    const dt=Math.min(0.05,(now-last)/1000);
+    last=now;
+
+    player.hp=clamp(player.hp,0,player.hpMax);
+
+    if(!sim.paused){
+      update(dt);
+    } else {
+      updateFX(dt);
+      updateParticles(dt);
+    }
+
+    // UI always
+    el.hpT.textContent=Math.ceil(player.hp);
+    el.armorT.textContent=Math.ceil(player.armor);
+    el.botT.textContent=!bot.hired?"-":(bot.down?"DOWN":`${Math.ceil(bot.hp)}/${bot.hpMax}`);
+    el.gunT.textContent=currentGun().name;
+    el.ammoT.textContent=`${gunState.mag}/${gunState.reserve}`;
+    el.fbT.textContent=player.flashbangs;
+    el.medT.textContent=player.medkits;
+    el.waveT.textContent=sim.wave;
+    el.killsT.textContent=`${sim.killsThisWave}/${sim.killsToClear}`;
+    el.scoreT.textContent=Math.floor(sim.score);
+    el.aliveT.textContent=zombies.length;
+    setFill(el.hpBar, el.hpBarT, (player.hp/player.hpMax)*100);
+    setFill(el.stBar, el.stBarT, (player.stamina/player.staminaMax)*100);
+
+    draw();
+
+    // toast fade
+    if(toastTimer>0){
+      toastTimer -= dt*1000;
+      if(toastTimer<=0) toastEl.style.opacity="0";
+    }
+
+    requestAnimationFrame(loop);
+  }
+
+  function init(){
+    resetAmmoForGun(true);
+    const loaded=loadGame();
+    applyTexts(); syncSelectors();
+    el.fsT.textContent = isFullscreen()?t("fsOn"):t("fsOff");
+
+    if(!loaded){
+      startWave(1);
+      sim.started=false; sim.paused=true;
+    } else {
+      sim.paused=true;
+      if(sim.wave<=0) startWave(1);
+      if(sim.killsToClear<=0) sim.killsToClear=calcKillsToClear(sim.wave||1);
+    }
+
+    showMainMenu();
+    requestAnimationFrame(loop);
+  }
+
+  init();
+})();
+</script>
+</body>
+</html>
